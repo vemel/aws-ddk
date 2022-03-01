@@ -14,6 +14,7 @@
 
 import logging
 import sys
+from pathlib import Path
 from typing import Optional
 
 from aws_ddk.sh import run
@@ -30,10 +31,15 @@ def python_executable() -> str:
         return "python3"
 
 
-def init_project(name: str, environment: str, template: Optional[str]) -> None:
+def is_in_git_repository(path: str) -> bool:
+    return Path(path, ".git").is_dir()
+
+
+def init_project(name: str, environment: str, template: Optional[str], generate_only: Optional[bool]) -> None:
     _logger.debug(f"name: {name}")
     _logger.debug(f"environment: {environment}")
     _logger.debug(f"template: {template}")
+    _logger.debug(f"generate_only: {generate_only}")
 
     python_exec: str = python_executable()
 
@@ -49,12 +55,32 @@ def init_project(name: str, environment: str, template: Optional[str]) -> None:
         },
     )
 
-    # Create virtual environment (.venv)
-    echo(f"Creating virtual environment in `{path}`...")
-    cmd: str = f"{python_exec} -m venv '{path}/.venv'"
-    try:
-        run(cmd)
-    except Exception:
-        secho(f"Failed to run `{cmd}`", blink=True, bold=True)
+    if not generate_only:
+        # Create git repository
+        if not is_in_git_repository(path):
+            echo("Initializing a new git repository...")
+            cmd_init: str = "git init"
+            cmd_add: str = "git add ."
+            cmd_commit: str = "git commit --message='Initial commit' --no-gpg-sign"
+            try:
+                run(cmd_init, path)
+                run(cmd_add, path)
+                run(cmd_commit, path)
+            except Exception:
+                secho(
+                    "Unable to initialize git repository for your project.",
+                    blink=True,
+                    bold=True,
+                )
 
-    echo("Done.")
+            echo("Done.")
+
+        # Create virtual environment (.venv)
+        echo(f"Creating virtual environment in `{path}`...")
+        cmd: str = f"{python_exec} -m venv '{path}/.venv'"
+        try:
+            run(cmd)
+        except Exception:
+            secho(f"Failed to run `{cmd}`", blink=True, bold=True)
+
+        echo("Done.")
